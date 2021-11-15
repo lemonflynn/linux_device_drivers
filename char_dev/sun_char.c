@@ -12,7 +12,34 @@ int sun_qset =      SUN_QSET;
 int sun_quantum =   SUN_QUANTUM;
 struct sun_dev *sun_devices;
 
+static struct sun_driver sun_char_driver = { 
+    .version = "$Revision: 0.1 $",
+    .module = THIS_MODULE,
+    .driver = { 
+        .name = "sun",
+    }   
+};
+
 static int sun_trim(struct sun_dev *dev);
+
+static ssize_t sun_show_dev(struct device *ddev, struct device_attribute *attr, char *buf)
+{
+    struct sun_dev * dev = ddev->driver_data;
+
+    return print_dev_t(buf, dev->cdev.dev);
+}
+    
+static DEVICE_ATTR(dev, S_IRUGO, sun_show_dev, NULL);
+
+static void sunchar_register_dev(struct sun_dev *dev, int index)
+{
+    sprintf(dev->devname, "sun_char%d", index);
+    dev->core_dev.name = dev->devname;
+    dev->core_dev.driver = &sun_char_driver;
+    dev->core_dev.dev.driver_data = dev;
+    register_sun_device(&dev->core_dev);
+    device_create_file(&dev->core_dev.dev, &dev_attr_dev);
+}
 
 static int sun_open(struct inode *inode, struct file *filp)
 {
@@ -202,6 +229,10 @@ static int sun_init(void)
 	printk("sun init major=%d, minor=%d\n", MAJOR(ndev), MINOR(ndev));
     sun_major = MAJOR(ndev);
 
+    /*
+    * Register with the driver core.
+    */
+    register_sun_driver(&sun_char_driver);
     sun_devices = kmalloc(sun_devs*sizeof (struct sun_dev), GFP_KERNEL);
     if (!sun_devices) {
         ret = -ENOMEM;
@@ -213,6 +244,7 @@ static int sun_init(void)
         sun_devices[i].qset = sun_qset;
         sema_init (&sun_devices[i].sem, 1); 
         sun_setup_cdev(sun_devices + i, i); 
+        sunchar_register_dev(sun_devices + i, i);
     }   
 
     return 0; /* succeed */
@@ -226,11 +258,13 @@ static void sun_exit(void)
 {
     int i;
     for (i = 0; i < sun_devs; i++) {
+        unregister_sun_device(&sun_devices[i].core_dev);
         cdev_del(&sun_devices[i].cdev);
         sun_trim(sun_devices + i);
     }
     kfree(sun_devices);
 
+    unregister_sun_driver(&sun_char_driver);
     unregister_chrdev_region(MKDEV(sun_major, 0), sun_devs);
 	printk("Removing sun_char module..\n");
 }

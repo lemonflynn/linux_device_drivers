@@ -1,5 +1,6 @@
 #include <linux/ioctl.h>
 #include <linux/cdev.h>
+#include "../sun_bus/sun_bus.h"
 
 #define SUN_QUANTUM  4000 /* use a quantum size like scull */
 #define SUN_QSET     500
@@ -15,6 +16,8 @@ struct sun_dev {
 	size_t size;              /* 32-bit will suffice */
 	struct semaphore sem;     /* Mutual exclusion */
 	struct cdev cdev;
+    char devname[20];
+    struct sun_device core_dev;
 };
 
 extern struct sun_dev *sun_devices;
